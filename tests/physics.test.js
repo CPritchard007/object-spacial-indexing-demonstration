@@ -1,0 +1,9 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {SpatialGrid,resolve,World} from '../src/physics.js';
+test('grid includes overlaps across cell boundaries and deduplicates multi-cell objects',()=>{const grid=new SpatialGrid(24);const a={x:23,y:24,r:7},b={x:27,y:26,r:7};grid.insert(a);grid.insert(b);assert.deepEqual(grid.query(a),[b]);grid.remove(b);assert.deepEqual(grid.query(a),[]);});
+test('grid never omits an overlapping circle across varied cell sizes',()=>{for(const size of [24,64,128]){const grid=new SpatialGrid(size);const bodies=Array.from({length:240},(_,i)=>({x:(i*97)%800-20,y:(i*61)%780-20,r:7}));bodies.forEach(b=>grid.insert(b));for(const a of bodies){const nearby=new Set(grid.query(a));for(const b of bodies)if(a!==b&&Math.hypot(a.x-b.x,a.y-b.y)<a.r+b.r)assert.ok(nearby.has(b));}}});
+test('ball collision separates circles and preserves equal-mass momentum',()=>{const a={x:0,y:0,r:7,vx:40,vy:0},b={x:12,y:0,r:7,vx:-10,vy:0};assert.ok(resolve(a,b));assert.equal(b.x-a.x,14);assert.ok(Math.abs(a.vx+b.vx-30)<1e-9);assert.ok(a.vx<b.vx);});
+test('peg stays fixed and reflects an approaching ball; coincident centers stay finite',()=>{const a={x:0,y:0,r:7,vx:100,vy:0},b={x:10,y:0,r:6,static:true};resolve(a,b);assert.equal(b.x,10);assert.ok(a.vx<0);a.x=b.x;a.y=b.y;resolve(a,b);assert.ok(Number.isFinite(a.x));});
+test('long simulation stays finite, indexes every live ball, and reduces checks',()=>{const w=new World();w.spawn(80);for(let i=0;i<1500;i++)w.tick();assert.ok(w.stats.tests<w.stats.budget*.2);for(const b of w.balls){assert.ok(Number.isFinite(b.x+b.y+b.vx+b.vy));assert.ok(b.x>=23&&b.x<=777);for(const key of w.grid.cells(b))assert.ok(w.grid.buckets.get(key).has(b));}});
+test('brute force checks every unique pair exactly once',()=>{const w=new World();w.spawn(10);w.method='brute';w.tick();assert.equal(w.stats.tests,w.stats.budget);});
